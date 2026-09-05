@@ -28,7 +28,16 @@
     .profile-card-display { padding: 15px; border-radius: 8px; margin-bottom: 15px; transition: 0.3s; }
     .opponent-card { border: 2px solid rgba(255, 255, 255, 0.2); margin-bottom: 12px; }
 
-    #board { width: 100%; max-width: 400px; margin: 10px auto; }
+    /* TABULEIRO OTIMIZADO PARA TOUCH / CELULAR */
+    #board { 
+      width: 100%; 
+      max-width: 400px; 
+      margin: 10px auto; 
+      touch-action: none; /* Impede a página de rolar ao arrastar peças */
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    
     .timer-display { display: flex; justify-content: space-between; background: #181715; padding: 10px 15px; border-radius: 6px; font-weight: bold; font-size: 1.1rem; }
 
     /* RESPONSIVIDADE PARA CELULARES */
@@ -203,6 +212,13 @@
     4: { xpNeed: 12, emoji: "👑", title: "O Melhor", color: "#8a2be2" },
     5: { xpNeed: 20, emoji: "🔥", title: "Lenda Suprema", color: "#d4af37" }
   };
+
+  // --- PREVENÇÃO DE SCROLL AO JOGAR NO CELULAR ---
+  document.addEventListener('touchmove', function (e) {
+    if (e.target.closest('#board')) {
+      e.preventDefault();
+    }
+  }, { passive: false });
 
   // --- AUTENTICAÇÃO ---
   window.register = async () => {
@@ -459,7 +475,6 @@
   function joinMatch(matchId) {
     if (matchUnsubscribe) matchUnsubscribe();
     
-    // Reseta estado local do jogo para evitar conflito de peças
     game.reset();
     if (board) board.start(false);
 
@@ -470,7 +485,6 @@
       if (!match) return;
       activeMatchData = match;
 
-      // Carrega FEN com validação
       const currentFen = match.fen === 'start' ? 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1' : match.fen;
       game.load(currentFen);
       
@@ -481,7 +495,6 @@
         board.orientation(targetOrientation);
       }
 
-      // Sincroniza posição sem animação
       board.position(game.fen(), false);
 
       const oppUid = isWhite ? match.black : match.white;
@@ -562,16 +575,14 @@
   }
 
   function onDragStart(source, piece) {
-    // Bloqueia se o jogo já terminou ou a partida não está ativa
     if (!activeMatchId || !activeMatchData || activeMatchData.status !== 'playing' || game.game_over()) {
       return false;
     }
 
     const isWhitePlayer = activeMatchData.white === currentUser.uid;
     const isBlackPlayer = activeMatchData.black === currentUser.uid;
-    const currentTurn = game.turn(); // 'w' ou 'b'
+    const currentTurn = game.turn();
 
-    // Garante que é o turno correto e a peça pertencente ao jogador
     if (currentTurn === 'w' && (!isWhitePlayer || piece.search(/^b/) !== -1)) return false;
     if (currentTurn === 'b' && (!isBlackPlayer || piece.search(/^w/) !== -1)) return false;
 
