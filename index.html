@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Xadrez Online Multiplayer</title>
+  <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #312e2b; color: #fff; margin: 0; padding: 15px; display: flex; justify-content: center; }
+    .container { max-width: 1000px; width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .card { background-color: #262421; padding: 20px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+    .admin-card { background-color: #1e293b; border: 2px solid #3b82f6; }
+    input, button, select { width: 100%; padding: 12px; margin: 8px 0; border-radius: 6px; border: none; font-size: 1rem; }
+    input { background-color: #3c3934; color: #fff; }
+    button { background-color: #81b64c; color: white; font-weight: bold; cursor: pointer; transition: 0.2s; }
+    button:hover { background-color: #a3d168; }
+    .btn-danger { background-color: #cc4444; }
+    .btn-danger:hover { background-color: #e55555; }
+    .btn-admin { background-color: #3b82f6; }
+    .btn-admin:hover { background-color: #60a5fa; }
+    .hidden { display: none !important; }
+    .badge { padding: 4px 8px; border-radius: 4px; font-weight: bold; display: inline-block; font-size: 0.9rem; }
+    .item-box { display: flex; justify-content: space-between; align-items: center; margin: 6px 0; background: #3c3934; padding: 10px; border-radius: 6px; flex-wrap: wrap; gap: 8px; }
+    .item-box button { width: auto; margin: 0; padding: 8px 14px; }
+    
+    /* Perfil Cards */
+    .profile-card-display { padding: 15px; border-radius: 8px; margin-bottom: 15px; transition: 0.3s; }
+    .opponent-card { border: 2px solid rgba(255, 255, 255, 0.2); margin-bottom: 12px; }
+
+    #board { width: 100%; max-width: 400px; margin: 10px auto; }
+    .timer-display { display: flex; justify-content: space-between; background: #181715; padding: 10px 15px; border-radius: 6px; font-weight: bold; font-size: 1.1rem; }
+
+    /* RESPONSIVIDADE PARA CELULARES */
+    @media (max-width: 768px) {
+      body { padding: 8px; }
+      .container { grid-template-columns: 1fr; gap: 12px; }
+      #auth-section, #admin-section { grid-column: span 1 !important; }
+      .admin-card > div { grid-template-columns: 1fr !important; }
+      .card { padding: 15px; }
+      #board { max-width: 100%; }
+      .timer-display { font-size: 0.95rem; padding: 8px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <!-- MÓDULO DE AUTENTICAÇÃO -->
+  <div id="auth-section" class="card" style="grid-column: span 2;">
+    <h2>Xadrez Online - Login / Cadastro</h2>
+    <input type="email" id="auth-email" placeholder="E-mail">
+    <input type="password" id="auth-password" placeholder="Senha">
+    <input type="text" id="auth-username" placeholder="Nome de Usuário (Obrigatório para Cadastro)">
+    <div style="display:flex; gap:10px;">
+      <button onclick="login()">Entrar</button>
+      <button onclick="register()" style="background-color: #45818e;">Cadastrar</button>
+    </div>
+  </div>
+
+  <!-- DASHBOARD / PERFIL -->
+  <div id="app-section" class="card hidden">
+    <h2>Seu Perfil</h2>
+    <div id="profile-display" class="profile-card-display">
+      <div style="font-size: 2rem;" id="p-avatar">♟️</div>
+      <h3 id="p-username" style="margin: 5px 0;">-</h3>
+      <p style="margin: 4px 0;">Nível: <b id="p-level">1</b> | XP: <b id="p-xp">0</b>/<span id="p-next-xp">3</span></p>
+      <p style="margin: 4px 0;">Título / Frase: <span id="p-title" class="badge" style="background:#555;">Iniciante</span></p>
+    </div>
+
+    <h4>Personalizar Perfil</h4>
+    <label>Cor do Perfil:</label>
+    <select id="select-color" onchange="updateCustomization()"></select>
+    
+    <label>Avatar Emoji:</label>
+    <select id="select-emoji" onchange="updateCustomization()"></select>
+
+    <h4>Amigos & Desafios</h4>
+    <input type="text" id="friend-search" placeholder="Buscar Usuário por Nome...">
+    <button onclick="addFriend()">Adicionar Amigo</button>
+    
+    <label style="margin-top: 10px; display:block;">Modo de Tempo para Desafios:</label>
+    <select id="time-mode-select" onchange="toggleCustomTimeInput()">
+      <option value="0">Infinito (Sem limite)</option>
+      <option value="600">10 Minutos</option>
+      <option value="1200">20 Minutos</option>
+      <option value="custom">Tempo Personalizado (Minutos)</option>
+    </select>
+    <input type="number" id="custom-time-min" class="hidden" placeholder="Minutos por jogador (ex: 5)" min="1" max="180">
+
+    <div id="friends-list"></div>
+
+    <h4 style="margin-top: 15px;">Desafios Recebidos e Enviados</h4>
+    <div id="challenges-list"><i>Nenhum desafio pendente.</i></div>
+  </div>
+
+  <!-- PAINEL ADMINISTRADOR -->
+  <div id="admin-section" class="card admin-card hidden" style="grid-column: span 2;">
+    <h2>⚡ Painel do Administrador</h2>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+      <div>
+        <h3>Modificar Meu Perfil</h3>
+        <label>Meu Emoji:</label>
+        <input type="text" id="admin-my-emoji">
+        <label>Minha Frase / Título:</label>
+        <input type="text" id="admin-my-title">
+        <label>Minha Cor (Hex/Nome):</label>
+        <input type="text" id="admin-my-color">
+        <label>Meu XP:</label>
+        <input type="number" id="admin-my-xp">
+        <button class="btn-admin" onclick="saveAdminSelfEdit()">Salvar Alterações</button>
+      </div>
+
+      <div>
+        <h3>Gerenciar Jogadores</h3>
+        <input type="text" id="admin-target-username" placeholder="Nome do Jogador">
+        <button class="btn-admin" onclick="loadTargetUser()">Buscar</button>
+        
+        <div id="admin-target-data" class="hidden" style="margin-top: 10px; padding: 10px; background: #0f172a; border-radius: 4px;">
+          <p style="margin: 0 0 8px 0;">Jogador: <b id="target-uname-lbl"></b></p>
+          <label>Definir XP:</label>
+          <input type="number" id="target-xp-input">
+          <label>Definir Nível:</label>
+          <input type="number" id="target-level-input">
+          <label>Promover a Admin?</label>
+          <select id="target-admin-select">
+            <option value="false">Não</option>
+            <option value="true">Sim</option>
+          </select>
+          <button class="btn-admin" onclick="saveTargetUserEdit()">Salvar Dados do Jogador</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TABULEIRO E JOGO -->
+  <div id="game-section" class="card hidden">
+    <h2>Partida de Xadrez</h2>
+
+    <!-- PERFIL DO ADVERSÁRIO -->
+    <div id="opponent-profile" class="profile-card-display opponent-card hidden">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <div style="font-size: 2.2rem;" id="opp-avatar">♟️</div>
+        <div>
+          <h3 id="opp-username" style="margin: 0;">Oponente</h3>
+          <p style="margin: 2px 0; font-size: 0.9rem;">
+            Nível: <b id="opp-level">1</b> | Título: <span id="opp-title" class="badge" style="background: rgba(0,0,0,0.3);">Novato</span>
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div id="status" style="font-weight: bold; color: #81b64c; margin-bottom: 8px;">Aguardando partida...</div>
+    
+    <div class="timer-display">
+      <span>Oponente: <span id="timer-black">--:--</span></span>
+      <span>Você: <span id="timer-white">--:--</span></span>
+    </div>
+
+    <div id="board"></div>
+
+    <button class="btn-danger" onclick="leaveGame()" style="margin-top: 15px;">Desistir / Abandonar Partida</button>
+  </div>
+</div>
+
+<!-- DEPENDÊNCIAS -->
+<script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+<script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+  import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+  import { getFirestore, doc, setDoc, getDoc, updateDoc, arrayUnion, onSnapshot, query, collection, where, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDl4yeaQUxMGmx3s0hfD_wec30OO058_CA",
+    authDomain: "xadrezo.firebaseapp.com",
+    projectId: "xadrezo",
+    storageBucket: "xadrezo.firebasestorage.app",
+    messagingSenderId: "1098253773398",
+    appId: "1:1098253773398:web:123157ef029eb5495d69f7"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  let currentUser = null;
+  let userData = null;
+  let board = null;
+  let game = new Chess();
+  let activeMatchId = null;
+  let matchUnsubscribe = null;
+  let loadedTargetUid = null;
+  let localTimerInterval = null;
+  let activeMatchData = null;
+
+  const UNLOCKS = {
+    1: { xpNeed: 3, emoji: "♟️", title: "Novato", color: "#3c3934" },
+    2: { xpNeed: 5, emoji: "🐴", title: "Estrategista", color: "#2e5266" },
+    3: { xpNeed: 8, emoji: "🏰", title: "Mestre Tático", color: "#6e4423" },
+    4: { xpNeed: 12, emoji: "👑", title: "O Melhor", color: "#8a2be2" },
+    5: { xpNeed: 20, emoji: "🔥", title: "Lenda Suprema", color: "#d4af37" }
+  };
+
+  // --- AUTENTICAÇÃO ---
+  window.register = async () => {
+    const email = $('#auth-email').val();
+    const password = $('#auth-password').val();
+    const username = $('#auth-username').val().trim();
+    if (!username) return alert('Insira um nome de usuário!');
+
+    try {
+      const res = await createUserWithEmailAndPassword(auth, email, password);
+      await setDoc(doc(db, "users", res.user.uid), {
+        uid: res.user.uid,
+        username: username,
+        xp: 0,
+        level: 1,
+        selectedColor: UNLOCKS[1].color,
+        selectedEmoji: UNLOCKS[1].emoji,
+        customTitle: "",
+        admin: false,
+        friends: []
+      });
+      await setDoc(doc(db, "usernames", username.toLowerCase()), { uid: res.user.uid });
+    } catch (e) { alert(e.message); }
+  };
+
+  window.login = () => {
+    signInWithEmailAndPassword(auth, $('#auth-email').val(), $('#auth-password').val())
+      .catch(e => alert(e.message));
+  };
+
+  onAuthStateChanged(auth, async (user) => {
+    if (user) {
+      currentUser = user;
+      $('#auth-section').addClass('hidden');
+      $('#app-section, #game-section').removeClass('hidden');
+      listenToUserData();
+      listenToChallenges();
+      initBoard();
+    }
+  });
+
+  // --- CONTROLE DE UI & AMIGOS ---
+  window.toggleCustomTimeInput = () => {
+    if ($('#time-mode-select').val() === 'custom') {
+      $('#custom-time-min').removeClass('hidden');
+    } else {
+      $('#custom-time-min').addClass('hidden');
+    }
+  };
+
+  function listenToUserData() {
+    onSnapshot(doc(db, "users", currentUser.uid), (docSnap) => {
+      userData = docSnap.data();
+      updateUIProfile();
+      renderFriends();
+      checkAdminStatus();
+    });
+  }
+
+  function checkAdminStatus() {
+    if (userData && userData.admin === true) {
+      $('#admin-section').removeClass('hidden');
+    } else {
+      $('#admin-section').addClass('hidden');
+    }
+  }
+
+  function updateUIProfile() {
+    $('#p-username').text(userData.username);
+    $('#p-level').text(userData.level);
+    $('#p-xp').text(userData.xp);
+    
+    const currentLvlInfo = UNLOCKS[userData.level] || UNLOCKS[5];
+    $('#p-next-xp').text(currentLvlInfo.xpNeed);
+    
+    const displayTitle = userData.customTitle || currentLvlInfo.title;
+    $('#p-title').text(displayTitle);
+    $('#p-avatar').text(userData.selectedEmoji);
+    $('#profile-display').css('background-color', userData.selectedColor);
+
+    $('#select-color, #select-emoji').empty();
+    for (let lvl = 1; lvl <= userData.level; lvl++) {
+      if(UNLOCKS[lvl]) {
+        $('#select-color').append(`<option value="${UNLOCKS[lvl].color}" ${userData.selectedColor === UNLOCKS[lvl].color ? 'selected':''}>Cor Nível ${lvl}</option>`);
+        $('#select-emoji').append(`<option value="${UNLOCKS[lvl].emoji}" ${userData.selectedEmoji === UNLOCKS[lvl].emoji ? 'selected':''}>${UNLOCKS[lvl].emoji} (Nível ${lvl})</option>`);
+      }
+    }
+  }
+
+  window.updateCustomization = async () => {
+    await updateDoc(doc(db, "users", currentUser.uid), {
+      selectedColor: $('#select-color').val(),
+      selectedEmoji: $('#select-emoji').val()
+    });
+  };
+
+  window.addFriend = async () => {
+    const targetName = $('#friend-search').val().trim().toLowerCase();
+    const nameDoc = await getDoc(doc(db, "usernames", targetName));
+    if (!nameDoc.exists()) return alert('Usuário não encontrado!');
+    
+    const friendUid = nameDoc.data().uid;
+    await updateDoc(doc(db, "users", currentUser.uid), {
+      friends: arrayUnion({ uid: friendUid, name: $('#friend-search').val().trim() })
+    });
+    $('#friend-search').val('');
+  };
+
+  function renderFriends() {
+    $('#friends-list').empty();
+    (userData.friends || []).forEach(f => {
+      $('#friends-list').append(`
+        <div class="item-box">
+          <span>${f.name}</span>
+          <button onclick="challengeFriend('${f.uid}', '${f.name}')">Desafiar</button>
+        </div>
+      `);
+    });
+  }
+
+  // --- SISTEMA DE DESAFIOS ---
+  window.challengeFriend = async (friendUid, friendName) => {
+    let modeVal = $('#time-mode-select').val();
+    let seconds = 0;
+
+    if (modeVal === 'custom') {
+      const min = parseInt($('#custom-time-min').val(), 10);
+      if (!min || min < 1) return alert('Insira um tempo válido em minutos!');
+      seconds = min * 60;
+    } else {
+      seconds = parseInt(modeVal, 10) || 0;
+    }
+
+    const matchRef = doc(collection(db, "matches"));
+    await setDoc(matchRef, {
+      white: currentUser.uid,
+      whiteName: userData.username,
+      black: friendUid,
+      blackName: friendName,
+      fen: 'start',
+      turn: 'w',
+      status: 'invited',
+      winner: null,
+      timeControl: seconds,
+      whiteTime: seconds,
+      blackTime: seconds,
+      lastMoveTime: Date.now()
+    });
+  };
+
+  function listenToChallenges() {
+    const q1 = query(collection(db, "matches"), where("black", "==", currentUser.uid), where("status", "==", "invited"));
+    const q2 = query(collection(db, "matches"), where("white", "==", currentUser.uid), where("status", "==", "invited"));
+
+    const updateChallengesUI = async () => {
+      const snapReceived = await getDocs(q1);
+      const snapSent = await getDocs(q2);
+
+      $('#challenges-list').empty();
+
+      if (snapReceived.empty && snapSent.empty) {
+        $('#challenges-list').html('<i>Nenhum desafio pendente.</i>');
+        return;
+      }
+
+      snapReceived.forEach(docSnap => {
+        const m = docSnap.data();
+        const tStr = m.timeControl === 0 ? 'Sem limite' : `${m.timeControl/60} min`;
+        $('#challenges-list').append(`
+          <div class="item-box">
+            <span><b>${m.whiteName}</b> te desafiou (${tStr})</span>
+            <div>
+              <button onclick="acceptChallenge('${docSnap.id}')">Aceitar</button>
+              <button class="btn-danger" onclick="declineChallenge('${docSnap.id}')">Recusar</button>
+            </div>
+          </div>
+        `);
+      });
+
+      snapSent.forEach(docSnap => {
+        const m = docSnap.data();
+        const tStr = m.timeControl === 0 ? 'Sem limite' : `${m.timeControl/60} min`;
+        $('#challenges-list').append(`
+          <div class="item-box">
+            <span>Aguardando resposta de <b>${m.blackName}</b> (${tStr})</span>
+            <button class="btn-danger" onclick="declineChallenge('${docSnap.id}')">Cancelar</button>
+          </div>
+        `);
+      });
+    };
+
+    onSnapshot(q1, () => updateChallengesUI());
+    onSnapshot(q2, () => updateChallengesUI());
+
+    const qPlaying = query(collection(db, "matches"), where("white", "==", currentUser.uid), where("status", "==", "playing"));
+    onSnapshot(qPlaying, (snap) => {
+      snap.forEach(docSnap => {
+        if (activeMatchId !== docSnap.id) {
+          joinMatch(docSnap.id);
+        }
+      });
+    });
+  }
+
+  window.acceptChallenge = async (matchId) => {
+    await updateDoc(doc(db, "matches", matchId), { 
+      status: "playing",
+      lastMoveTime: Date.now()
+    });
+    joinMatch(matchId);
+  };
+
+  window.declineChallenge = async (matchId) => {
+    await updateDoc(doc(db, "matches", matchId), { status: "declined" });
+  };
+
+  // --- CARREGAR PERFIL DO ADVERSÁRIO ---
+  async function loadOpponentProfile(oppUid) {
+    const oppDoc = await getDoc(doc(db, "users", oppUid));
+    if (oppDoc.exists()) {
+      const oppData = oppDoc.data();
+      const oppLvlInfo = UNLOCKS[oppData.level] || UNLOCKS[5];
+      const oppTitle = oppData.customTitle || oppLvlInfo.title;
+
+      $('#opp-username').text(oppData.username);
+      $('#opp-avatar').text(oppData.selectedEmoji || oppLvlInfo.emoji);
+      $('#opp-level').text(oppData.level || 1);
+      $('#opp-title').text(oppTitle);
+      $('#opponent-profile').css('background-color', oppData.selectedColor || oppLvlInfo.color);
+      $('#opponent-profile').removeClass('hidden');
+    }
+  }
+
+  // --- TABULEIRO E TEMPO REAL ---
+  function initBoard() {
+    board = Chessboard('board', {
+      draggable: true,
+      position: 'start',
+      pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png',
+      onDragStart: onDragStart,
+      onDrop: handleMove,
+      onSnapEnd: () => {
+        if (board && game) {
+          board.position(game.fen(), false);
+        }
+      }
+    });
+
+    $(window).resize(() => {
+      if (board) board.resize();
+    });
+  }
+
+  function joinMatch(matchId) {
+    if (matchUnsubscribe) matchUnsubscribe();
+    
+    // Reseta estado local do jogo para evitar conflito de peças
+    game.reset();
+    if (board) board.start(false);
+
+    activeMatchId = matchId;
+
+    matchUnsubscribe = onSnapshot(doc(db, "matches", matchId), async (docSnap) => {
+      const match = docSnap.data();
+      if (!match) return;
+      activeMatchData = match;
+
+      // Carrega FEN com validação
+      const currentFen = match.fen === 'start' ? 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1' : match.fen;
+      game.load(currentFen);
+      
+      const isWhite = match.white === currentUser.uid;
+      const targetOrientation = isWhite ? 'white' : 'black';
+      
+      if (board.orientation() !== targetOrientation) {
+        board.orientation(targetOrientation);
+      }
+
+      // Sincroniza posição sem animação
+      board.position(game.fen(), false);
+
+      const oppUid = isWhite ? match.black : match.white;
+      loadOpponentProfile(oppUid);
+
+      updateTimersDisplay(match);
+
+      if (match.status === 'finished') {
+        clearInterval(localTimerInterval);
+        if (match.winner === currentUser.uid) {
+          $('#status').text('🏆 Fim de jogo! VOCÊ VENCEU!');
+        } else if (match.winner === 'draw') {
+          $('#status').text('🤝 Empate!');
+        } else {
+          $('#status').text('❌ Você perdeu a partida.');
+        }
+        return;
+      }
+
+      const turnText = match.turn === 'w' ? 'Brancas' : 'Pretas';
+      const isMyTurn = (match.turn === 'w' && isWhite) || (match.turn === 'b' && !isWhite);
+      $('#status').text(`Vez das ${turnText} ${isMyTurn ? '(SUA VEZ)' : '(Aguardando)'}`);
+
+      startLocalClock();
+    });
+  }
+
+  function startLocalClock() {
+    clearInterval(localTimerInterval);
+    if (!activeMatchData || activeMatchData.timeControl === 0 || activeMatchData.status !== 'playing') return;
+
+    localTimerInterval = setInterval(async () => {
+      const now = Date.now();
+      const lastMove = activeMatchData.lastMoveTime || now;
+      const elapsed = Math.max(0, Math.floor((now - lastMove) / 1000));
+
+      let wTime = typeof activeMatchData.whiteTime === 'number' ? activeMatchData.whiteTime : 0;
+      let bTime = typeof activeMatchData.blackTime === 'number' ? activeMatchData.blackTime : 0;
+
+      if (activeMatchData.turn === 'w') {
+        wTime = Math.max(0, wTime - elapsed);
+      } else {
+        bTime = Math.max(0, bTime - elapsed);
+      }
+
+      const isWhite = activeMatchData.white === currentUser.uid;
+      $('#timer-white').text(formatTime(isWhite ? wTime : bTime));
+      $('#timer-black').text(formatTime(isWhite ? bTime : wTime));
+
+      if (wTime <= 0 || bTime <= 0) {
+        clearInterval(localTimerInterval);
+        const winner = wTime <= 0 ? activeMatchData.black : activeMatchData.white;
+        if (currentUser.uid === winner && activeMatchData.status === 'playing') {
+          await finishMatch(winner);
+        }
+      }
+    }, 1000);
+  }
+
+  function updateTimersDisplay(match) {
+    if (match.timeControl === 0) {
+      $('#timer-white').text('∞');
+      $('#timer-black').text('∞');
+      return;
+    }
+    const isWhite = match.white === currentUser.uid;
+    const wTime = typeof match.whiteTime === 'number' ? match.whiteTime : 0;
+    const bTime = typeof match.blackTime === 'number' ? match.blackTime : 0;
+    
+    $('#timer-white').text(formatTime(isWhite ? wTime : bTime));
+    $('#timer-black').text(formatTime(isWhite ? bTime : wTime));
+  }
+
+  function formatTime(sec) {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  }
+
+  function onDragStart(source, piece) {
+    // Bloqueia se o jogo já terminou ou a partida não está ativa
+    if (!activeMatchId || !activeMatchData || activeMatchData.status !== 'playing' || game.game_over()) {
+      return false;
+    }
+
+    const isWhitePlayer = activeMatchData.white === currentUser.uid;
+    const isBlackPlayer = activeMatchData.black === currentUser.uid;
+    const currentTurn = game.turn(); // 'w' ou 'b'
+
+    // Garante que é o turno correto e a peça pertencente ao jogador
+    if (currentTurn === 'w' && (!isWhitePlayer || piece.search(/^b/) !== -1)) return false;
+    if (currentTurn === 'b' && (!isBlackPlayer || piece.search(/^w/) !== -1)) return false;
+
+    return true;
+  }
+
+  async function handleMove(source, target) {
+    if (!activeMatchId) return 'snapback';
+
+    const move = game.move({ from: source, to: target, promotion: 'q' });
+    if (move === null) return 'snapback';
+
+    const now = Date.now();
+    const lastMove = activeMatchData.lastMoveTime || now;
+    const elapsed = Math.max(0, Math.floor((now - lastMove) / 1000));
+
+    let wTime = typeof activeMatchData.whiteTime === 'number' ? activeMatchData.whiteTime : 0;
+    let bTime = typeof activeMatchData.blackTime === 'number' ? activeMatchData.blackTime : 0;
+
+    if (activeMatchData.timeControl > 0) {
+      if (activeMatchData.turn === 'w') {
+        wTime = Math.max(0, wTime - elapsed);
+      } else {
+        bTime = Math.max(0, bTime - elapsed);
+      }
+    }
+
+    let status = 'playing';
+    let winner = null;
+
+    if (game.in_checkmate()) {
+      status = 'finished';
+      winner = currentUser.uid;
+      await processWin();
+    } else if (game.in_draw()) {
+      status = 'finished';
+      winner = 'draw';
+    }
+
+    await updateDoc(doc(db, "matches", activeMatchId), {
+      fen: game.fen(),
+      turn: game.turn(),
+      status: status,
+      winner: winner,
+      whiteTime: wTime,
+      blackTime: bTime,
+      lastMoveTime: now
+    });
+  }
+
+  async function finishMatch(winnerUid) {
+    if (winnerUid === currentUser.uid) {
+      await processWin();
+    }
+    await updateDoc(doc(db, "matches", activeMatchId), {
+      status: 'finished',
+      winner: winnerUid
+    });
+  }
+
+  async function processWin() {
+    let newXp = userData.xp + 1;
+    let newLvl = userData.level;
+    const currentReq = UNLOCKS[userData.level] ? UNLOCKS[userData.level].xpNeed : 999;
+
+    if (newXp >= currentReq) {
+      newLvl += 1;
+      alert(`🎉 Você ganhou +1 XP e subiu para o Nível ${newLvl}!`);
+    } else {
+      alert(`🎉 Você venceu a partida e ganhou +1 XP!`);
+    }
+
+    await updateDoc(doc(db, "users", currentUser.uid), {
+      xp: newXp,
+      level: newLvl
+    });
+  }
+
+  window.leaveGame = async () => {
+    if (activeMatchId && activeMatchData && activeMatchData.status === 'playing') {
+      if (confirm("Tem certeza que deseja desistir? Isso dará a vitória ao seu adversário.")) {
+        const opponentUid = activeMatchData.white === currentUser.uid ? activeMatchData.black : activeMatchData.white;
+        await updateDoc(doc(db, "matches", activeMatchId), {
+          status: 'finished',
+          winner: opponentUid
+        });
+      } else {
+        return;
+      }
+    }
+
+    if (matchUnsubscribe) matchUnsubscribe();
+    clearInterval(localTimerInterval);
+    activeMatchId = null;
+    activeMatchData = null;
+    game.reset();
+    board.start(false);
+    $('#opponent-profile').addClass('hidden');
+    $('#status').text('Aguardando partida...');
+  };
+
+  // --- ADMIN FUNCTIONS ---
+  window.saveAdminSelfEdit = async () => {
+    if (!userData.admin) return;
+    const newXp = parseInt($('#admin-my-xp').val());
+
+    await updateDoc(doc(db, "users", currentUser.uid), {
+      selectedEmoji: $('#admin-my-emoji').val().trim() || userData.selectedEmoji,
+      customTitle: $('#admin-my-title').val().trim(),
+      selectedColor: $('#admin-my-color').val().trim() || userData.selectedColor,
+      xp: isNaN(newXp) ? userData.xp : newXp
+    });
+
+    alert("Perfil alterado com sucesso!");
+  };
+
+  window.loadTargetUser = async () => {
+    const username = $('#admin-target-username').val().trim().toLowerCase();
+    const nameDoc = await getDoc(doc(db, "usernames", username));
+    if (!nameDoc.exists()) return alert("Jogador não encontrado!");
+
+    loadedTargetUid = nameDoc.data().uid;
+    const userDoc = await getDoc(doc(db, "users", loadedTargetUid));
+    const targetData = userDoc.data();
+
+    $('#target-uname-lbl').text(targetData.username);
+    $('#target-xp-input').val(targetData.xp);
+    $('#target-level-input').val(targetData.level);
+    $('#target-admin-select').val(targetData.admin ? "true" : "false");
+    $('#admin-target-data').removeClass('hidden');
+  };
+
+  window.saveTargetUserEdit = async () => {
+    if (!loadedTargetUid) return;
+    await updateDoc(doc(db, "users", loadedTargetUid), {
+      xp: parseInt($('#target-xp-input').val()) || 0,
+      level: parseInt($('#target-level-input').val()) || 1,
+      admin: $('#target-admin-select').val() === "true"
+    });
+    alert("Jogador modificado com sucesso!");
+  };
+</script>
+</body>
+</html>
